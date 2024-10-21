@@ -1,0 +1,325 @@
+// cviceni 2 - analyza vyskoveho modelu a jednoduche time-series analyza
+// cilem je zobrazit vztah mezi modelem sklonitosti a vegetacnim indexem NDVI
+// dale si zobrazit delsi casovou radu vyvoje naseho uzemi a pripadne ukazat kde nastaly vyznamne zmeny v nasem uzemi v ramci 2 let
+
+// 1) nacteni potrebnych vstupnich dat - SRTM, Sentinel-2
+//var geometry = npr_rejviz
+
+var image = ee.Image('CGIAR/SRTM90_V4');
+var image_clip = image.clip(geometry)
+Map.addLayer(image_clip,{},'SRTM clip podle zajmoveho uzemi')
+
+var S2 = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED");
+
+var startDate = '2019-01-01'
+var endDate = '2019-12-31'
+
+// 2) filtrace kolekce rasteru
+
+// filter mraku (2 zpusoby, vybiram kolik % a take funkci je maskuju)
+
+//funkce pro maskovani mraku
+function maskCloudAndShadows(image) {
+    var cloudProb = image.select('MSK_CLDPRB');
+    var snowProb = image.select('MSK_SNWPRB');
+    var cloud = cloudProb.lt(5);
+    var snow = snowProb.lt(5);
+    var scl = image.select('SCL'); 
+    var shadow = scl.eq(3); // 3 = cloud shadow
+    var cirrus = scl.eq(10); // 10 = cirrus
+    // Cloud probability less than 5% or cloud shadow classification
+    var mask = (cloud.and(snow)).and(cirrus.neq(1)).and(shadow.neq(1));
+    return image.updateMask(mask);
+  }
+
+  var S2 = S2
+  .filterDate(startDate, endDate)
+  .filterBounds(geometry)
+  .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 30))
+  .map(maskCloudAndShadows);  
+
+// View the median composite
+var vizParams = {bands: ['B4', 'B3', 'B2'], min: 0, max: 2000}
+Map.addLayer(S2.median(), vizParams, 'collection S2 median')
+
+var first_s2 = S2.first()
+Map.addLayer(first_s2, vizParams, 'collection S2 first image')
+
+// 3) vypocet indexu NDVI
+
+// Adding a NDVI band
+function addNDVI(image) {
+    var ndvi = image.normalizedDifference(['B8', 'B4']).rename('ndvi')
+    return image.addBands([ndvi])
+  }
+
+var S2_NDVI = S2.map(addNDVI)
+
+var first_ndvi = S2_NDVI.select('ndvi').first();
+
+var palette = ['FFFFFF', 'CE7E45', 'DF923D', 'F1B555', 'FCD163', '99B718',
+               '74A901', '66A000', '529400', '3E8601', '207401', '056201',
+               '004C00', '023B01', '012E01', '011D01', '011301'];
+
+Map.addLayer(S2_NDVI.select('ndvi').mean(), {min: -1, max: 1, palette: palette}, 'Prumer NDVI 2019')
+Map.addLayer(first_ndvi, {min: -1, max: 1, palette: palette}, 'NDVI first image');
+
+// 4) zobrazeni statistickych hodnot
+
+// VARIANTA S JEDNIM SNIMKEM
+var maxReducer = ee.Reducer.max();
+var minReducer = ee.Reducer.min();
+var avgReducer = ee.Reducer.mean();
+var first_ndvi_max = first_ndvi.reduceRegion(maxReducer, geometry);
+var first_ndvi_min = first_ndvi.reduceRegion(minReducer, geometry);
+var first_ndvi_avg = first_ndvi.reduceRegion(avgReducer, geometry);
+
+print('Prvni snimek NDVI s nejmensi oblacnosti za rok 2019 má maximální hodnotu: ',first_ndvi_max)
+print('Prvni snimek NDVI s nejmensi oblacnosti za rok 2019 má minimální hodnotu: ',first_ndvi_min)
+print('Prvni snimek NDVI s nejmensi oblacnosti za rok 2019 má průměrnou hodnotu: ',first_ndvi_avg)
+
+//hodnoty vysky v zajmovem uzemi
+var vyska_max = image.reduceRegion(maxReducer, geometry);
+var vyska_min = image.reduceRegion(minReducer, geometry);
+var vyska_avg = image.reduceRegion(avgReducer, geometry);
+
+print('V zajmovem uzemi je nejvyšší bod ve výšce: ',vyska_max)
+//minimalni hodnota vysky pro dane uzemi
+print('V zajmovem uzemi je nejnižší bod ve výšce: ',vyska_min)
+print('V zajmovem uzemi je pruměrná výška: ',vyska_avg)
+
+// 5) graficke zobrazeni vysky v zajmove oblasti
+
+// Generate the histogram data.  Use minBucketWidth for nice sized buckets.
+var histogram1 = ui.Chart.image.histogram({
+    image: image,
+    region: geometry,
+    scale: 20,
+    //minBucketWidth: 300
+  }).setOptions({
+    title: 'Histogram of Elevation in Colorado (meters)',
+    hAxis: {title: 'Vyska [m]'},
+    vAxis: {title: 'Count'},
+    pointSize: 0,
+    lineSize: 2,
+    colors: ['1b7837']
+  });
+ print(histogram1)
+
+// 6) graficke zobrazeni indexu
+
+var chart = ui.Chart.image.series({
+    imageCollection: S2_NDVI.select('ndvi'),
+    region: geometry
+    }).setOptions({
+      interpolateNulls: true,
+      lineWidth: 1,
+      pointSize: 3,
+      title: 'NDVI over Time at a Single Location',
+      vAxis: {title: 'NDVI'},
+      hAxis: {title: 'Date', format: 'YYYY-MMM', gridlines: {count: 12}}
+    })
+print(chart)
+
+// 7) vypocet sklonitosti z vyskoveho rasteru
+
+var sklonitost = ee.Terrain.slope(image_clip)
+//zoom on the specified location
+Map.centerObject(geometry)
+//better color scale for the slope model
+var skala1 = ['white','blue','red','black']
+//add the image to the map and adjust the range of values
+Map.addLayer(sklonitost.clip(geometry),{min:0, max:60, palette:skala1},'Slope model from SRTM');
+
+var histogram2 = ui.Chart.image.histogram({
+    image: sklonitost,
+    region: geometry,
+    scale: 20
+  }).setOptions({
+    title: 'Histogram of Slope Values within Geometry',
+    hAxis: {title: 'Slope Value [°]'},
+    vAxis: {title: 'Count'}
+  });  
+
+ print(histogram2)
+ 
+// 8) change between rasters (2019 mam, vytvorim 2020,2021,2022,2023,2024)
+var S2_2019_first = S2.first().clip(geometry)
+
+var S2_2020 = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
+  .filterDate('2020-01-01', '2020-12-31')
+  .filterBounds(geometry)
+  .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))
+  .map(maskCloudAndShadows)
+  .map(addNDVI);
+
+var S2_2020_first = S2_2020.first().clip(geometry);  
+
+var S2_2021 = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
+  .filterDate('2021-01-01', '2021-12-31')
+  .filterBounds(geometry)
+  .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))
+  .map(maskCloudAndShadows) 
+  .map(addNDVI);
+
+var S2_2021_first = S2_2021.first().clip(geometry);  
+
+var S2_2022 = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
+  .filterDate('2022-01-01', '2022-12-31')
+  .filterBounds(geometry)
+  .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))
+  .map(maskCloudAndShadows)
+  .map(addNDVI);
+
+var S2_2022_first = S2_2022.first().clip(geometry);  
+
+var S2_2023 = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
+  .filterDate('2023-01-01', '2023-12-31')
+  .filterBounds(geometry)
+  .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))
+  .map(maskCloudAndShadows)
+  .map(addNDVI);
+
+var S2_2023_first = S2_2023.first().clip(geometry);   
+  
+var S2_2024 = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
+  .filterDate('2024-01-01', '2024-06-04')
+  .filterBounds(geometry)
+  .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))
+  .map(maskCloudAndShadows)
+  .map(addNDVI);
+
+var S2_2024_first = S2_2024.first().clip(geometry);    
+
+Map.addLayer(S2_2019_first, vizParams, 'collection S2 median 2019')
+Map.addLayer(S2_2020_first, vizParams, 'collection S2 median 2020')
+Map.addLayer(S2_2021_first, vizParams, 'collection S2 median 2021')
+Map.addLayer(S2_2022_first, vizParams, 'collection S2 median 2022')
+Map.addLayer(S2_2023_first, vizParams, 'collection S2 median 2023')
+Map.addLayer(S2_2024_first, vizParams, 'collection S2 median 2024')
+
+// 9) export na drive
+
+Export.image.toDrive({
+    image: S2_2019_first.toUint16(),
+    description: 'S2_2019_s_nejmensi_oblacnosti',
+    folder: 'gee_export',
+    region: geometry,
+    scale: 30,
+    crs: 'EPSG:4326'
+  });
+
+Export.image.toDrive({
+    image: S2_2020_first.toUint16(),
+    description: 'S2_2020_s_nejmensi_oblacnosti',
+    folder: 'gee_export',
+    region: geometry,
+    scale: 30,
+    crs: 'EPSG:4326'
+  });  
+
+  Export.image.toDrive({
+    image: S2_2021_first.toUint16(),
+    description: 'S2_2021_s_nejmensi_oblacnosti',
+    folder: 'gee_export',
+    region: geometry,
+    scale: 30,
+    crs: 'EPSG:4326'
+  });
+
+  Export.image.toDrive({
+    image: S2_2022_first.toUint16(),
+    description: 'S2_2022_s_nejmensi_oblacnosti',
+    folder: 'gee_export',
+    region: geometry,
+    scale: 30,
+    crs: 'EPSG:4326'
+  });
+  
+  Export.image.toDrive({
+    image: S2_2023_first.toUint16(),
+    description: 'S2_2023_s_nejmensi_oblacnosti',
+    folder: 'gee_export',
+    region: geometry,
+    scale: 30,
+    crs: 'EPSG:4326'
+  });
+  
+  Export.image.toDrive({
+    image: S2_2024_first.toUint16(),
+    description: 'S2_2024_s_nejmensi_oblacnosti',
+    folder: 'gee_export',
+    region: geometry,
+    scale: 30,
+    crs: 'EPSG:4326'
+  });  
+
+// 10) snimek si zobrazte v AG Pro
+
+// 11) pro zájemce - grafy NDVI v různých letech
+
+var chart_ndvi_2020 = ui.Chart.image.series({
+    imageCollection: S2_2020.select('ndvi'),
+    region: geometry
+    }).setOptions({
+      interpolateNulls: true,
+      lineWidth: 1,
+      pointSize: 3,
+      title: 'Průmerná hodnota NDVI v zájmové oblasti v roce 2020',
+      vAxis: {title: 'NDVI'},
+      hAxis: {title: 'Date', format: 'YYYY-MMM', gridlines: {count: 12}}
+    })
+
+var chart_ndvi_2021 = ui.Chart.image.series({
+    imageCollection: S2_2021.select('ndvi'),
+    region: geometry
+    }).setOptions({
+      interpolateNulls: true,
+      lineWidth: 1,
+      pointSize: 3,
+      title: 'Průmerná hodnota NDVI v zájmové oblasti v roce 2021',
+      vAxis: {title: 'NDVI'},
+      hAxis: {title: 'Date', format: 'YYYY-MMM', gridlines: {count: 12}}
+    })
+
+var chart_ndvi_2022 = ui.Chart.image.series({
+    imageCollection: S2_2022.select('ndvi'),
+    region: geometry
+    }).setOptions({
+      interpolateNulls: true,
+      lineWidth: 1,
+      pointSize: 3,
+      title: 'Průmerná hodnota NDVI v zájmové oblasti v roce 2022',
+      vAxis: {title: 'NDVI'},
+      hAxis: {title: 'Date', format: 'YYYY-MMM', gridlines: {count: 12}}
+    })
+
+var chart_ndvi_2023 = ui.Chart.image.series({
+    imageCollection: S2_2023.select('ndvi'),
+    region: geometry
+    }).setOptions({
+      interpolateNulls: true,
+      lineWidth: 1,
+      pointSize: 3,
+      title: 'Průmerná hodnota NDVI v zájmové oblasti v roce 2023',
+      vAxis: {title: 'NDVI'},
+      hAxis: {title: 'Date', format: 'YYYY-MMM', gridlines: {count: 12}}
+    })
+
+var chart_ndvi_2024 = ui.Chart.image.series({
+    imageCollection: S2_2024.select('ndvi'),
+    region: geometry
+    }).setOptions({
+      interpolateNulls: true,
+      lineWidth: 1,
+      pointSize: 3,
+      title: 'Průmerná hodnota NDVI v zájmové oblasti v roce 2024',
+      vAxis: {title: 'NDVI'},
+      hAxis: {title: 'Date', format: 'YYYY-MMM', gridlines: {count: 12}}
+    });
+
+print(chart_ndvi_2020);
+print(chart_ndvi_2021);
+print(chart_ndvi_2022);
+print(chart_ndvi_2023);
+print(chart_ndvi_2024);
