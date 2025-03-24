@@ -1,0 +1,109 @@
+# This script focuses on using Forest-based regression in ArcGIS Pro automatically with using scripted algoritm
+
+import arcpy
+import random
+from arcpy.sa import *
+
+# Enable Spatial Analyst Extension
+arcpy.CheckOutExtension("Spatial")
+
+# Set workspace
+arcpy.env.workspace = r"E:\Mendelu\predmety\Tvorba_Software\navrhovy_vzor\Indices_calculation\output"  # Change to your workspace path
+arcpy.env.overwriteOutput = True
+
+# Input point feature class with tree species
+points = "Sentinel-2_tree_species_Krtiny_points.shp"  # Update with your data
+species_field = "Druh"  # Field containing tree species labels
+
+# List of predictor rasters (NDVI, EVI, etc.)
+predictor_rasters = [
+    "S2_03_20_2024_slp_EVI.tif",
+    "S2_03_20_2024_slp_NDVI.tif"
+]  # Add all vegetation index rasters you need
+
+# Create training (80%) and validation (20%) subsets
+training_points = "training_points"
+validation_points = "validation_points"
+
+# Generate shuffled indices and split into 80% train / 20% validation
+point_ids = list(range(point_count))
+random.shuffle(point_ids)
+split_index = int(0.8 * point_count)
+train_ids = point_ids[:split_index]
+valid_ids = point_ids[split_index:]
+
+# Add a unique ID field if not present
+id_field = "UID"
+fields = [f.name for f in arcpy.ListFields(points)]
+if id_field not in fields:
+    arcpy.management.AddField(points, id_field, "LONG")
+    with arcpy.da.UpdateCursor(points, ["OID@", id_field]) as cursor:
+        for i, row in enumerate(cursor):
+            cursor.updateRow([row[0], i])
+
+# Create training and validation feature layers
+training_layer = "training_points_layer"
+validation_layer = "validation_points_layer"
+
+arcpy.management.MakeFeatureLayer(points, training_layer, f"{id_field} IN {tuple(train_ids)}")
+arcpy.management.MakeFeatureLayer(points, validation_layer, f"{id_field} IN {tuple(valid_ids)}")
+
+# Run Forest-based Classification Model
+
+# Regression Model Parameters (User-Defined)
+n_trees = 100  # Number of trees in the forest
+max_depth = 10  # Maximum tree depth (None = auto)
+min_leaf_size = 5  # Minimum number of samples in a leaf node
+sample_size = 100  # Number of samples used per tree
+random_seed = 42  # Fix randomness for reproducibility
+
+output_model = r"E:\Mendelu\predmety\Tvorba_Software\navrhovy_vzor\Indices_calculation\output\Regresni_model_druhy_SLP"
+predicted_raster = r"E:\Mendelu\predmety\Tvorba_Software\navrhovy_vzor\Indices_calculation\output\SLP_predicted_species.tif"
+
+arcpy.sa.Forest(
+    analysis_type="regression",
+    in_features=training_layer,
+    dependent_variable=dependent_variable,
+    in_rasters=predictor_rasters,
+    out_model=output_model,
+    out_raster=predicted_raster,
+    validation=validation_layer,
+    number_of_trees=n_trees,
+    max_tree_depth=max_depth,
+    min_leaf_size=min_leaf_size,
+    sample_size=sample_size,
+    seed=random_seed
+)
+
+# Export validation results
+validation_output = r"E:\Mendelu\predmety\Tvorba_Software\navrhovy_vzor\Indices_calculation\output\SLP_validation_results.shp"
+arcpy.management.CopyFeatures(validation_layer, validation_output)
+
+# Extract accuracy metrics from result messages
+messages = result.getMessages()
+metrics = {}
+for line in messages.split("\n"):
+    if "Root Mean Squared Error" in line:
+        metrics["RMSE"] = line.split(":")[-1].strip()
+    if "R Squared" in line:
+        metrics["R²"] = line.split(":")[-1].strip()
+    if "Mean Error" in line:
+        metrics["Mean Error"] = line.split(":")[-1].strip()
+    if "Standard Deviation of Residuals" in line:
+        metrics["Std Dev Residuals"] = line.split(":")[-1].strip()
+
+# Print extracted accuracy metrics
+print("\n==== Regression Model Accuracy ====")
+for key, value in metrics.items():
+    print(f"{key}: {value}")
+
+# Save metrics to a text file
+accuracy_report = r"C:\path\to\your\accuracy_report.txt"
+with open(accuracy_report, "w") as file:
+    file.write("==== Regression Model Accuracy ====\n")
+    for key, value in metrics.items():
+        file.write(f"{key}: {value}\n")
+
+print(f"\nAccuracy metrics saved to: {accuracy_report}")
+
+print("Forest-based Classification Model completed successfully!")
