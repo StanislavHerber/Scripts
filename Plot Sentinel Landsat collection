@@ -1,0 +1,20 @@
+# Načtení potřebných knihoven
+library(ggplot2)
+library(readr)
+
+# Načtení dat
+df <- read_csv("C:/Users/stand/Downloads/Sentinel_Landsat_Harmonized_NDVI_Export.csv")
+print(head(df))  # Tisk první řádky
+print(colnames(df))  # Tisk názvů sloupců
+
+# Převedení sloupce 'date' na datum
+df$date <- as.Date(df$date)
+
+# Vykreslení bodů a čar s barvami podle senzoru
+ggplot(df, aes(x = date, y = NDVI, color = sensor, group = sensor)) +
+  geom_point() +  # Vykreslení bodů
+  geom_line(alpha = 1, linetype = "dashed") +  # Přidání čar
+  scale_color_manual(values = c("Sentinel" = "red", "Landsat" = "blue")) +  # Ruční přiřazení barev
+  labs(title = "NDVI časová řada - deciduous woodland") +
+  theme_minimal() +
+  theme(legend.title = element_blank())  # Volitelné: skrýt název legendy
