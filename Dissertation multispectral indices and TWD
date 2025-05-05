@@ -1,0 +1,185 @@
+// Comparison of multispectral vegetation indices and TWD (+ transpiration from dendronet measurements)
+//---Inputs
+var aoi = ee.FeatureCollection("users/standaherber/SLP_Krtiny");
+var startDate = '2017-01-01';
+var endDate = '2024-12-31';
+var maxCloud = 30;
+
+var Dendro_body = DendroNET_body.select(['plot_ID']);
+var Fire_body = FireRisk_body.select(['plot_ID']);
+var points = Dendro_body.merge(Fire_body);
+var points_aoi = points.filterBounds(aoi);
+
+//--- Sentinel (HLSS30)
+var hlss = ee.ImageCollection("NASA/HLS/HLSS30/v002")
+  .filterDate(startDate, endDate)
+  .filter(ee.Filter.lt('CLOUD_COVERAGE', maxCloud))
+  .filterBounds(aoi);
+
+//--- Landsat (HLSL30)
+var hlsl = ee.ImageCollection("NASA/HLS/HLSL30/v002")
+  .filterDate(startDate, endDate)
+  .filter(ee.Filter.lt('CLOUD_COVERAGE', maxCloud))
+  .filterBounds(aoi);
+
+//--- NDVI
+var addNDVI_Sentinel = function(image) {
+  var ndvi = image.normalizedDifference(['B8A', 'B4']).rename('NDVI');
+  return image.addBands(ndvi)
+              .set('sensor', 'Sentinel')
+              .set('system:time_start', image.get('system:time_start'));
+};
+var addNDVI_Landsat = function(image) {
+  var ndvi = image.normalizedDifference(['B5', 'B4']).rename('NDVI');
+  return image.addBands(ndvi)
+              .set('sensor', 'Landsat')
+              .set('system:time_start', image.get('system:time_start'));
+};
+
+//--- MSI
+var addMSI_Sentinel = function(image) {
+  var msi = image.select('B11').divide(image.select('B8A')).rename('MSI');
+  return image.addBands(msi);
+};
+var addMSI_Landsat = function(image) {
+  var msi = image.select('B6').divide(image.select('B5')).rename('MSI');
+  return image.addBands(msi);
+};
+
+//--- NDWI
+var addNDWI_Sentinel = function(image) {
+  var ndwi = image.normalizedDifference(['B3', 'B11']).rename('NDWI');
+  return image.addBands(ndwi);
+};
+var addNDWI_Landsat = function(image) {
+  var ndwi = image.normalizedDifference(['B3', 'B6']).rename('NDWI');
+  return image.addBands(ndwi);
+};
+
+//--- NDRE
+var addNDRE_Sentinel = function(image) {
+  var ndre = image.normalizedDifference(['B8A', 'B5']).rename('NDRE');
+  return image.addBands(ndre);
+};
+var addNDRE_Landsat = function(image) {
+  var ndre = image.normalizedDifference(['B5', 'B4']).rename('NDRE');
+  return image.addBands(ndre);
+};
+
+//--- EVI
+var addEVI_Sentinel = function(image) {
+  var evi = image.expression(
+    '2.5 * ((NIR - RED) / (NIR + 6 * RED - 7.5 * BLUE + 1))', {
+      'NIR': image.select('B8A'),
+      'RED': image.select('B4'),
+      'BLUE': image.select('B2')
+    }).rename('EVI');
+  return image.addBands(evi);
+};
+var addEVI_Landsat = function(image) {
+  var evi = image.expression(
+    '2.5 * ((NIR - RED) / (NIR + 6 * RED - 7.5 * BLUE + 1))', {
+      'NIR': image.select('B5'),
+      'RED': image.select('B4'),
+      'BLUE': image.select('B2')
+    }).rename('EVI');
+  return image.addBands(evi);
+};
+
+//--- GNDVI
+var addGNDVI_Sentinel = function(image) {
+  var gndvi = image.normalizedDifference(['B8A', 'B3']).rename('GNDVI');
+  return image.addBands(gndvi);
+};
+var addGNDVI_Landsat = function(image) {
+  var gndvi = image.normalizedDifference(['B5', 'B3']).rename('GNDVI');
+  return image.addBands(gndvi);
+};
+
+//--- SAVI
+var addSAVI_Sentinel = function(image) {
+  var savi = image.expression(
+    '((NIR - RED) / (NIR + RED + 0.5)) * 1.5', {
+      'NIR': image.select('B8A'),
+      'RED': image.select('B4')
+    }).rename('SAVI');
+  return image.addBands(savi);
+};
+var addSAVI_Landsat = function(image) {
+  var savi = image.expression(
+    '((NIR - RED) / (NIR + RED + 0.5)) * 1.5', {
+      'NIR': image.select('B5'),
+      'RED': image.select('B4')
+    }).rename('SAVI');
+  return image.addBands(savi);
+};
+
+//--- OSAVI
+var addOSAVI_Sentinel = function(image) {
+  var osavi = image.expression(
+    '((NIR - RED) / (NIR + RED + 0.16)) * 1.16', {
+      'NIR': image.select('B8A'),
+      'RED': image.select('B4')
+    }).rename('OSAVI');
+  return image.addBands(osavi);
+};
+var addOSAVI_Landsat = function(image) {
+  var osavi = image.expression(
+    '((NIR - RED) / (NIR + RED + 0.16)) * 1.16', {
+      'NIR': image.select('B5'),
+      'RED': image.select('B4')
+    }).rename('OSAVI');
+  return image.addBands(osavi);
+};
+
+//--- Combine all the calculations into a .map() function
+var hlss_index = hlss.map(addNDVI_Sentinel)
+                    .map(addMSI_Sentinel)
+                    .map(addNDWI_Sentinel)
+                    .map(addNDRE_Sentinel)
+                    .map(addEVI_Sentinel)
+                    .map(addGNDVI_Sentinel)
+                    .map(addSAVI_Sentinel)
+                    .map(addOSAVI_Sentinel);
+
+var hlsl_index = hlsl.map(addNDVI_Landsat)
+                    .map(addMSI_Landsat)
+                    .map(addNDWI_Landsat)
+                    .map(addNDRE_Landsat)
+                    .map(addEVI_Landsat)
+                    .map(addGNDVI_Landsat)
+                    .map(addSAVI_Landsat)
+                    .map(addOSAVI_Landsat);
+
+var all_hls = hlss_index.merge(hlsl_index);
+
+//--- Výpočet průměrů indexů pro body
+var table = all_hls.map(function(image) {
+  var imageID = image.id();
+  var sensor = image.get('sensor');
+  var dateString = ee.String(imageID.split('_').get(2));
+  var date = ee.Date.parse('YYYYMMdd', dateString.slice(0, 8)).format('dd-MM-YYYY');
+
+  return image.select(['NDVI', 'MSI', 'NDWI', 'NDRE', 'EVI', 'GNDVI', 'SAVI', 'OSAVI'])
+    .reduceRegions({
+      collection: points_aoi,
+      reducer: ee.Reducer.mean(),
+      scale: 10
+    }).map(function(f) {
+      return f.set({
+        'sensor': sensor,
+        'date': date,
+        'imageID': imageID
+      });
+    });
+}).flatten().filter(ee.Filter.neq('NDVI', null));
+
+//--- Export
+Export.table.toDrive({
+  collection: table,
+  description: 'All_Vegetation_Indices_Export',
+  folder: 'gee_export',
+  fileNamePrefix: 'Vegetation_Indices_SLP',
+  fileFormat: 'CSV',
+  selectors: ['plot_ID', 'date', 'sensor', 'NDVI', 'MSI', 'NDWI', 'NDRE', 'EVI', 'GNDVI', 'SAVI', 'OSAVI']
+});
