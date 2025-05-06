@@ -14,6 +14,10 @@ var Fire_body = FireRisk_body.select(['plot_ID']);
 var points = Dendro_body.merge(Fire_body);
 var points_aoi = points.filterBounds(aoi);
 
+var points_aoi = points_aoi.map(function(f){
+  return(f.buffer(15));
+});
+
 //--- Sentinel (HLSS30)
 var hlss = ee.ImageCollection("NASA/HLS/HLSS30/v002")
   .filterDate(startDate, endDate)
@@ -504,9 +508,9 @@ var table = all_hls.map(function(image) {
 //--- Export
 Export.table.toDrive({
   collection: table.sort('plot_ID'),
-  description: 'All_Vegetation_Indices_Export_SLP',
+  description: 'All_Vegetation_Indices_Export',
   folder: 'gee_export',
-  fileNamePrefix: 'Vegetation_Indices_SLP',
+  fileNamePrefix: 'All_Vegetation_Indices_Export_SLP',
   fileFormat: 'CSV',
   selectors: ['plot_ID', 'date', 'sensor', 'NDVI', 'MSI', 'NDWI', 'NDRE', 'EVI', 'GNDVI', 'SAVI', 'OSAVI', 'MSAVI', 'NDMI', 'NBR', 'TVI', 'MNDWI', 'WRI', 'mSR', 'ARVI', 'BWDRVI', 'CIgreen', 'CVI', 'GARI']
 });
