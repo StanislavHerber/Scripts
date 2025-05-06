@@ -4,3 +4,5 @@ Dissertation multispectral indices and TWD = a script which focuses on calculati
 GEE_cv1 - Introduction of basics of Google Earth Engine for students
 
 GEE_cv2 - First analysis of specific area of interest in Google Earth Engine
+
+Sentinel_Landsat_indices_TWD - R analysis of relationships between multispectral indices and TWD values
