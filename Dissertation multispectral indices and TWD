@@ -504,7 +504,7 @@ var table = all_hls.map(function(image) {
 //--- Export
 Export.table.toDrive({
   collection: table.sort('plot_ID'),
-  description: 'All_Vegetation_Indices_Export',
+  description: 'All_Vegetation_Indices_Export_SLP',
   folder: 'gee_export',
   fileNamePrefix: 'Vegetation_Indices_SLP',
   fileFormat: 'CSV',
