@@ -4,6 +4,8 @@
 //Inputs
 //----------------------------------------------------------------------------
 
+var DendroNET_body = ee.FeatureCollection("users/standaherber/DendroNET_body");
+var FireRisk_body = ee.FeatureCollection("users/standaherber/FireRisk_body");
 var aoi = ee.FeatureCollection("users/standaherber/SLP_Krtiny");
 var startDate = '2017-01-01';
 var endDate = '2024-12-31';
@@ -14,9 +16,17 @@ var Fire_body = FireRisk_body.select(['plot_ID']);
 var points = Dendro_body.merge(Fire_body);
 var points_aoi = points.filterBounds(aoi);
 
+//----------------------------------------------------------------------------
+// Buffer of 15 m was used to gather weighted average of each area
+//----------------------------------------------------------------------------
+
 var points_aoi = points_aoi.map(function(f){
   return(f.buffer(15));
 });
+
+//----------------------------------------------------------------------------
+// Load and filter Harmonized collections of Landsat and Sentinel
+//----------------------------------------------------------------------------
 
 //--- Sentinel (HLSS30)
 var hlss = ee.ImageCollection("NASA/HLS/HLSS30/v002")
