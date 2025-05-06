@@ -1,5 +1,9 @@
 // Comparison of multispectral vegetation indices and TWD (+ transpiration from dendronet measurements)
-//---Inputs
+
+//----------------------------------------------------------------------------
+//Inputs
+//----------------------------------------------------------------------------
+
 var aoi = ee.FeatureCollection("users/standaherber/SLP_Krtiny");
 var startDate = '2017-01-01';
 var endDate = '2024-12-31';
@@ -22,7 +26,10 @@ var hlsl = ee.ImageCollection("NASA/HLS/HLSL30/v002")
   .filter(ee.Filter.lt('CLOUD_COVERAGE', maxCloud))
   .filterBounds(aoi);
 
-//--- NDVI
+//----------------------------------------------------------------------------
+// NDVI
+//----------------------------------------------------------------------------
+
 var addNDVI_Sentinel = function(image) {
   var ndvi = image.normalizedDifference(['B8A', 'B4']).rename('NDVI');
   return image.addBands(ndvi)
@@ -36,7 +43,10 @@ var addNDVI_Landsat = function(image) {
               .set('system:time_start', image.get('system:time_start'));
 };
 
-//--- MSI
+//----------------------------------------------------------------------------
+//MSI
+//----------------------------------------------------------------------------
+
 var addMSI_Sentinel = function(image) {
   var msi = image.select('B11').divide(image.select('B8A')).rename('MSI');
   return image.addBands(msi);
@@ -46,7 +56,10 @@ var addMSI_Landsat = function(image) {
   return image.addBands(msi);
 };
 
-//--- NDWI
+//----------------------------------------------------------------------------
+// NDWI
+//----------------------------------------------------------------------------
+
 var addNDWI_Sentinel = function(image) {
   var ndwi = image.normalizedDifference(['B3', 'B11']).rename('NDWI');
   return image.addBands(ndwi);
@@ -56,7 +69,10 @@ var addNDWI_Landsat = function(image) {
   return image.addBands(ndwi);
 };
 
-//--- NDRE
+//----------------------------------------------------------------------------
+// NDRE
+//----------------------------------------------------------------------------
+
 var addNDRE_Sentinel = function(image) {
   var ndre = image.normalizedDifference(['B8A', 'B5']).rename('NDRE');
   return image.addBands(ndre);
@@ -66,7 +82,10 @@ var addNDRE_Landsat = function(image) {
   return image.addBands(ndre);
 };
 
-//--- EVI
+//----------------------------------------------------------------------------
+// EVI
+//----------------------------------------------------------------------------
+
 var addEVI_Sentinel = function(image) {
   var evi = image.expression(
     '2.5 * ((NIR - RED) / (NIR + 6 * RED - 7.5 * BLUE + 1))', {
@@ -86,7 +105,10 @@ var addEVI_Landsat = function(image) {
   return image.addBands(evi);
 };
 
-//--- GNDVI
+//----------------------------------------------------------------------------
+// GNDVI
+//----------------------------------------------------------------------------
+
 var addGNDVI_Sentinel = function(image) {
   var gndvi = image.normalizedDifference(['B8A', 'B3']).rename('GNDVI');
   return image.addBands(gndvi);
@@ -96,7 +118,10 @@ var addGNDVI_Landsat = function(image) {
   return image.addBands(gndvi);
 };
 
-//--- SAVI
+//----------------------------------------------------------------------------
+// SAVI
+//----------------------------------------------------------------------------
+
 var addSAVI_Sentinel = function(image) {
   var savi = image.expression(
     '((NIR - RED) / (NIR + RED + 0.5)) * 1.5', {
@@ -114,7 +139,10 @@ var addSAVI_Landsat = function(image) {
   return image.addBands(savi);
 };
 
-//--- OSAVI
+//----------------------------------------------------------------------------
+// OSAVI
+//----------------------------------------------------------------------------
+
 var addOSAVI_Sentinel = function(image) {
   var osavi = image.expression(
     '((NIR - RED) / (NIR + RED + 0.16)) * 1.16', {
@@ -132,24 +160,323 @@ var addOSAVI_Landsat = function(image) {
   return image.addBands(osavi);
 };
 
+//----------------------------------------------------------------------------
+// MSAVI formula: (2 * NIR + 1 – sqrt ((2 * NIR + 1)2 – 8 * (NIR - R))) / 2
+//----------------------------------------------------------------------------
+
+var addMSAVI_Sentinel = function(image) {
+  var msavi = image.expression(
+    '(2 * NIR + 1 - sqrt(pow((2 * NIR + 1), 2) - 8 * (NIR - RED)) ) / 2', {
+      'NIR': image.select('B8A'),
+      'RED': image.select('B4')
+    }).rename('MSAVI');
+  return image.addBands(msavi);
+};
+
+var addMSAVI_Landsat = function(image) {
+  var msavi = image.expression(
+    '(2 * NIR + 1 - sqrt(pow((2 * NIR + 1), 2) - 8 * (NIR - RED)) ) / 2', {
+      'NIR': image.select('B5'),
+      'RED': image.select('B4')
+    }).rename('MSAVI');
+  return image.addBands(msavi);
+};
+
+//----------------------------------------------------------------------------
+// MDMI formula: (NIR-SWIR)/(NIR+SWIR)
+//----------------------------------------------------------------------------
+
+var addNDMI_Sentinel = function(image) {
+  var ndmi = image.expression(
+    '(NIR - SWIR) / (NIR + SWIR)', {
+      'NIR': image.select('B8A'),
+      'SWIR': image.select('B11')
+    }).rename('NDMI');
+  return image.addBands(ndmi);
+};
+
+var addNDMI_Landsat = function(image) {
+  var ndmi = image.expression(
+    '(NIR - SWIR) / (NIR + SWIR)', {
+      'NIR': image.select('B5'),
+      'SWIR': image.select('B6')
+    }).rename('NDMI');
+  return image.addBands(ndmi);
+};
+
+//----------------------------------------------------------------------------
+// NBR formula: (NIR-SWIR)/(NIR+SWIR)
+//----------------------------------------------------------------------------
+
+var addNBR_Sentinel = function(image) {
+  var nbr = image.expression(
+    '(NIR - SWIR) / (NIR + SWIR)', {
+      'NIR': image.select('B8A'),
+      'SWIR': image.select('B12')
+    }).rename('NBR');
+  return image.addBands(nbr);
+};
+
+var addNBR_Landsat = function(image) {
+  var nbr = image.expression(
+    '(NIR - SWIR) / (NIR + SWIR)', {
+      'NIR': image.select('B5'),
+      'SWIR': image.select('B7')
+    }).rename('NBR');
+  return image.addBands(nbr);
+};
+
+//----------------------------------------------------------------------------
+// TVI formula:
+//----------------------------------------------------------------------------
+
+var addTVI_Sentinel = function(image) {
+  var ndvi = image.select('NDVI'); // Assuming NDVI band already exists
+  var tvi = ndvi.add(0.5).sqrt().rename('TVI');
+  return image.addBands(tvi);
+};
+
+var addTVI_Landsat = function(image) {
+  var ndvi = image.select('NDVI'); // Assuming NDVI band already exists
+  var tvi = ndvi.add(0.5).sqrt().rename('TVI');
+  return image.addBands(tvi);
+};
+
+//----------------------------------------------------------------------------
+// MNDWI - Modified Normalized Difference Water Index formula: (G-SWIR1)-(G+SWIR1)
+//----------------------------------------------------------------------------
+
+var addMNDWI_Sentinel = function(image) {
+  var mndwi = image.expression(
+    '(GREEN - SWIR1) / (GREEN + SWIR1)', {
+      'GREEN': image.select('B3'),
+      'SWIR1': image.select('B11')
+    }).rename('MNDWI');
+  return image.addBands(mndwi);
+};
+
+var addMNDWI_Landsat = function(image) {
+  var mndwi = image.expression(
+    '(GREEN - SWIR1) / (GREEN + SWIR1)', {
+      'GREEN': image.select('B3'),
+      'SWIR1': image.select('B6')
+    }).rename('MNDWI');
+  return image.addBands(mndwi);
+};
+
+//----------------------------------------------------------------------------
+// WRI - water ratio index formula: (GREEN + RED)/(NIR + SWIR1)
+//----------------------------------------------------------------------------
+
+var addWRI_Sentinel = function(image) {
+  var wri = image.expression(
+    '(GREEN + RED) / (NIR + SWIR1)', {
+      'GREEN': image.select('B3'),
+      'RED': image.select('B4'),
+      'NIR': image.select('B8A'),
+      'SWIR1': image.select('B11')
+    }).rename('WRI');
+  return image.addBands(wri);
+};
+
+var addWRI_Landsat = function(image) {
+  var wri = image.expression(
+    '(GREEN + RED) / (NIR + SWIR1)', {
+      'GREEN': image.select('B3'),
+      'RED': image.select('B4'),
+      'NIR': image.select('B5'),
+      'SWIR1': image.select('B6')
+    }).rename('WRI');
+  return image.addBands(wri);
+};
+
+//----------------------------------------------------------------------------
+// mSR - modified Simple Ratio formula: (NIR-R)-1 / (√NIR+R)+1
+//----------------------------------------------------------------------------
+
+var addmSR_Sentinel = function(image) {
+  var msr = image.expression(
+    '(NIR - RED) / (sqrt(NIR + RED) + 1)', {
+      'NIR': image.select('B8A'),
+      'RED': image.select('B4')
+    }).rename('mSR');
+  return image.addBands(msr);
+};
+
+var addmSR_Landsat = function(image) {
+  var msr = image.expression(
+    '(NIR - RED) / (sqrt(NIR + RED) + 1)', {
+      'NIR': image.select('B5'),
+      'RED': image.select('B4')
+    }).rename('mSR');
+  return image.addBands(msr);
+};
+
+//----------------------------------------------------------------------------
+// ARVI formula: (NIR - RED - y * (RED - BLUE))/ (NIR + RED - y*(RED-BLUE))
+// (NIR - (RED −1∗(BLUE - RED)))/(NIR ​+ ​(RED −1∗(BLUE - RED))
+//----------------------------------------------------------------------------
+
+var addARVI_Sentinel = function(image){
+  var arvi = image.expression(
+    '(NIR - (RED - 1 * (BLUE - RED))) / (NIR + (RED - 1 * (BLUE - RED)))', {
+    'NIR': image.select('B8A'),
+    'RED': image.select('B4'),
+    'BLUE': image.select('B2')
+  }).rename('ARVI');
+  return image.addBands(arvi)
+};
+
+var addARVI_Landsat = function(image){
+  var arvi = image.expression(
+    '(NIR - (RED - 1 * (BLUE - RED))) / (NIR + (RED - 1 * (BLUE - RED)))', {
+    'NIR': image.select('B5'),
+    'RED': image.select('B4'),
+    'BLUE': image.select('B2')
+  }).rename('ARVI');
+  return image.addBands(arvi)
+};
+
+//----------------------------------------------------------------------------
+// BWDRVI (Blue-wide dynamic range vegetation index) formula: 
+//----------------------------------------------------------------------------
+
+var addBWDRVI_Sentinel = function(image){
+  var bwdrvi = image.expression(
+    '(0.1 * NIR - BLUE) / (0.1 * NIR + BLUE)', {
+    'NIR': image.select('B8A'),   // Near-Infrared
+    'BLUE': image.select('B2')   // Blue
+  }).rename('BWDRVI');
+  return image.addBands(bwdrvi)
+}
+
+var addBWDRVI_Landsat = function(image){
+  var bwdrvi = image.expression(
+    '(0.1 * NIR - BLUE) / (0.1 * NIR + BLUE)', {
+    'NIR': image.select('B5'),   // Near-Infrared
+    'BLUE': image.select('B2')   // Blue
+  }).rename('BWDRVI');
+  return image.addBands(bwdrvi)
+}
+
+//----------------------------------------------------------------------------
+//  CIgreen (Chlorophyll Index Green) formula: (NIR/GREEN) -1
+//----------------------------------------------------------------------------
+
+var addCIgreen_Sentinel = function(image){
+  var cigreen = image.expression(
+    '(NIR / GREEN) - 1', {
+      'NIR': image.select('B8A'),    // Near-Infrared
+      'GREEN': image.select('B3')  // Green
+    }).rename('CIgreen');
+  return image.addBands(cigreen);
+};
+
+var addCIgreen_Landsat = function(image){
+  var cigreen = image.expression(
+    '(NIR / GREEN) - 1', {
+      'NIR': image.select('B5'),    
+      'GREEN': image.select('B3')  
+    }).rename('CIgreen');
+  return image.addBands(cigreen);
+};
+
+//----------------------------------------------------------------------------
+//  CVI (Chlorophyll vegetation index) formula: 
+//----------------------------------------------------------------------------
+
+var addCVI_Sentinel = function(image){
+  var cvi = image.expression(
+    'NIR * pow(RED / GREEN, 2)', {
+      'NIR': image.select('B8A'),    
+      'RED': image.select('B4'),    
+      'GREEN': image.select('B3')  
+    }).rename('CVI');
+  return image.addBands(cvi);
+};
+
+var addCVI_Landsat = function(image){
+  var cvi = image.expression(
+    'NIR * pow(RED / GREEN, 2)', {
+      'NIR': image.select('B5'),    
+      'RED': image.select('B4'),    
+      'GREEN': image.select('B3')  
+    }).rename('CVI');
+  return image.addBands(cvi);
+};
+
+//----------------------------------------------------------------------------
+//  GARI (Green atmospherically resistant vegetation index) formula: 
+//----------------------------------------------------------------------------
+
+var addGARI_Sentinel = function(image){
+  var gari = image.expression(
+    '(NIR - (GREEN - (BLUE - RED))) / (NIR - (GREEN + (BLUE - RED)))', {
+      'NIR': image.select('B8A'),    
+      'GREEN': image.select('B3'),  
+      'BLUE': image.select('B2'),   
+      'RED': image.select('B4')     
+    }).rename('GARI');
+  return image.addBands(gari);
+};
+
+var addGARI_Landsat = function(image){
+  var gari = image.expression(
+    '(NIR - (GREEN - (BLUE - RED))) / (NIR - (GREEN + (BLUE - RED)))', {
+      'NIR': image.select('B5'),    
+      'GREEN': image.select('B3'),  
+      'BLUE': image.select('B2'),   
+      'RED': image.select('B4')     
+    }).rename('GARI');
+  return image.addBands(gari);
+};
+
+
+// thermal data from landsat 8
+
+
 //--- Combine all the calculations into a .map() function
 var hlss_index = hlss.map(addNDVI_Sentinel)
-                    .map(addMSI_Sentinel)
-                    .map(addNDWI_Sentinel)
-                    .map(addNDRE_Sentinel)
-                    .map(addEVI_Sentinel)
-                    .map(addGNDVI_Sentinel)
-                    .map(addSAVI_Sentinel)
-                    .map(addOSAVI_Sentinel);
+                  .map(addMSI_Sentinel)
+                  .map(addNDWI_Sentinel)
+                  .map(addNDRE_Sentinel)
+                  .map(addEVI_Sentinel)
+                  .map(addGNDVI_Sentinel)
+                  .map(addSAVI_Sentinel)
+                  .map(addOSAVI_Sentinel)
+                  .map(addMSAVI_Sentinel)
+                  .map(addNDMI_Sentinel)
+                  .map(addNBR_Sentinel)
+                  .map(addTVI_Sentinel)
+                  .map(addMNDWI_Sentinel)
+                  .map(addWRI_Sentinel)
+                  .map(addmSR_Sentinel)
+                  .map(addARVI_Sentinel)
+                  .map(addBWDRVI_Sentinel)
+                  .map(addCIgreen_Sentinel)
+                  .map(addCVI_Sentinel)
+                  .map(addGARI_Sentinel);
 
 var hlsl_index = hlsl.map(addNDVI_Landsat)
-                    .map(addMSI_Landsat)
-                    .map(addNDWI_Landsat)
-                    .map(addNDRE_Landsat)
-                    .map(addEVI_Landsat)
-                    .map(addGNDVI_Landsat)
-                    .map(addSAVI_Landsat)
-                    .map(addOSAVI_Landsat);
+                  .map(addMSI_Landsat)
+                  .map(addNDWI_Landsat)
+                  .map(addNDRE_Landsat)
+                  .map(addEVI_Landsat)
+                  .map(addGNDVI_Landsat)
+                  .map(addSAVI_Landsat)
+                  .map(addOSAVI_Landsat)
+                  .map(addMSAVI_Landsat)
+                  .map(addNDMI_Landsat)
+                  .map(addNBR_Landsat)
+                  .map(addTVI_Landsat)
+                  .map(addMNDWI_Landsat)
+                  .map(addWRI_Landsat)
+                  .map(addmSR_Landsat)
+                  .map(addARVI_Landsat)
+                  .map(addBWDRVI_Landsat)
+                  .map(addCIgreen_Landsat)
+                  .map(addCVI_Landsat)
+                  .map(addGARI_Landsat);
 
 var all_hls = hlss_index.merge(hlsl_index);
 
@@ -160,7 +487,7 @@ var table = all_hls.map(function(image) {
   var dateString = ee.String(imageID.split('_').get(2));
   var date = ee.Date.parse('YYYYMMdd', dateString.slice(0, 8)).format('dd-MM-YYYY');
 
-  return image.select(['NDVI', 'MSI', 'NDWI', 'NDRE', 'EVI', 'GNDVI', 'SAVI', 'OSAVI'])
+  return image.select(['NDVI', 'MSI', 'NDWI', 'NDRE', 'EVI', 'GNDVI', 'SAVI', 'OSAVI', 'MSAVI', 'NDMI', 'NBR', 'TVI', 'MNDWI', 'WRI', 'mSR', 'ARVI', 'BWDRVI', 'CIgreen', 'CVI', 'GARI'])
     .reduceRegions({
       collection: points_aoi,
       reducer: ee.Reducer.mean(),
@@ -181,5 +508,5 @@ Export.table.toDrive({
   folder: 'gee_export',
   fileNamePrefix: 'Vegetation_Indices_SLP',
   fileFormat: 'CSV',
-  selectors: ['plot_ID', 'date', 'sensor', 'NDVI', 'MSI', 'NDWI', 'NDRE', 'EVI', 'GNDVI', 'SAVI', 'OSAVI']
+  selectors: ['plot_ID', 'date', 'sensor', 'NDVI', 'MSI', 'NDWI', 'NDRE', 'EVI', 'GNDVI', 'SAVI', 'OSAVI', 'MSAVI', 'NDMI', 'NBR', 'TVI', 'MNDWI', 'WRI', 'mSR', 'ARVI', 'BWDRVI', 'CIgreen', 'CVI', 'GARI']
 });
