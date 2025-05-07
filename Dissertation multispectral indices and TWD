@@ -20,7 +20,7 @@ var points_aoi = points.filterBounds(aoi);
 // Buffer of 15 m was used to gather weighted average of each area
 //----------------------------------------------------------------------------
 
-var points_aoi = points_aoi.map(function(f){
+var points = points.map(function(f){
   return(f.buffer(15));
 });
 
@@ -32,13 +32,13 @@ var points_aoi = points_aoi.map(function(f){
 var hlss = ee.ImageCollection("NASA/HLS/HLSS30/v002")
   .filterDate(startDate, endDate)
   .filter(ee.Filter.lt('CLOUD_COVERAGE', maxCloud))
-  .filterBounds(aoi);
+  .filterBounds(points);
 
 //--- Landsat (HLSL30)
 var hlsl = ee.ImageCollection("NASA/HLS/HLSL30/v002")
   .filterDate(startDate, endDate)
   .filter(ee.Filter.lt('CLOUD_COVERAGE', maxCloud))
-  .filterBounds(aoi);
+  .filterBounds(points);
 
 //----------------------------------------------------------------------------
 // NDVI
@@ -63,11 +63,15 @@ var addNDVI_Landsat = function(image) {
 
 var addMSI_Sentinel = function(image) {
   var msi = image.select('B11').divide(image.select('B8A')).rename('MSI');
-  return image.addBands(msi);
+  return image.addBands(msi)
+              .set('sensor', 'Sentinel')
+              .set('system:time_start', image.get('system:time_start'));
 };
 var addMSI_Landsat = function(image) {
   var msi = image.select('B6').divide(image.select('B5')).rename('MSI');
-  return image.addBands(msi);
+  return image.addBands(msi)
+              .set('sensor', 'Landsat')
+              .set('system:time_start', image.get('system:time_start'));
 };
 
 //----------------------------------------------------------------------------
@@ -76,11 +80,15 @@ var addMSI_Landsat = function(image) {
 
 var addNDWI_Sentinel = function(image) {
   var ndwi = image.normalizedDifference(['B3', 'B11']).rename('NDWI');
-  return image.addBands(ndwi);
+  return image.addBands(ndwi)
+              .set('sensor', 'Sentinel')
+              .set('system:time_start', image.get('system:time_start'));  
 };
 var addNDWI_Landsat = function(image) {
   var ndwi = image.normalizedDifference(['B3', 'B6']).rename('NDWI');
-  return image.addBands(ndwi);
+  return image.addBands(ndwi)
+              .set('sensor', 'Landsat')
+              .set('system:time_start', image.get('system:time_start'));  
 };
 
 //----------------------------------------------------------------------------
@@ -89,11 +97,15 @@ var addNDWI_Landsat = function(image) {
 
 var addNDRE_Sentinel = function(image) {
   var ndre = image.normalizedDifference(['B8A', 'B5']).rename('NDRE');
-  return image.addBands(ndre);
+  return image.addBands(ndre)
+              .set('sensor', 'Sentinel')
+              .set('system:time_start', image.get('system:time_start'));  
 };
 var addNDRE_Landsat = function(image) {
   var ndre = image.normalizedDifference(['B5', 'B4']).rename('NDRE');
-  return image.addBands(ndre);
+  return image.addBands(ndre)
+              .set('sensor', 'Landsat')
+              .set('system:time_start', image.get('system:time_start'));  
 };
 
 //----------------------------------------------------------------------------
@@ -107,7 +119,9 @@ var addEVI_Sentinel = function(image) {
       'RED': image.select('B4'),
       'BLUE': image.select('B2')
     }).rename('EVI');
-  return image.addBands(evi);
+  return image.addBands(evi)
+              .set('sensor', 'Sentinel')
+              .set('system:time_start', image.get('system:time_start'));  
 };
 var addEVI_Landsat = function(image) {
   var evi = image.expression(
@@ -116,7 +130,9 @@ var addEVI_Landsat = function(image) {
       'RED': image.select('B4'),
       'BLUE': image.select('B2')
     }).rename('EVI');
-  return image.addBands(evi);
+  return image.addBands(evi)
+              .set('sensor', 'Landsat')
+              .set('system:time_start', image.get('system:time_start'));
 };
 
 //----------------------------------------------------------------------------
@@ -125,11 +141,15 @@ var addEVI_Landsat = function(image) {
 
 var addGNDVI_Sentinel = function(image) {
   var gndvi = image.normalizedDifference(['B8A', 'B3']).rename('GNDVI');
-  return image.addBands(gndvi);
+  return image.addBands(gndvi)
+              .set('sensor', 'Sentinel')
+              .set('system:time_start', image.get('system:time_start'));
 };
 var addGNDVI_Landsat = function(image) {
   var gndvi = image.normalizedDifference(['B5', 'B3']).rename('GNDVI');
-  return image.addBands(gndvi);
+  return image.addBands(gndvi)
+              .set('sensor', 'Landsat')
+              .set('system:time_start', image.get('system:time_start'));  
 };
 
 //----------------------------------------------------------------------------
@@ -142,7 +162,9 @@ var addSAVI_Sentinel = function(image) {
       'NIR': image.select('B8A'),
       'RED': image.select('B4')
     }).rename('SAVI');
-  return image.addBands(savi);
+  return image.addBands(savi)
+              .set('sensor', 'Sentinel')
+              .set('system:time_start', image.get('system:time_start'));  
 };
 var addSAVI_Landsat = function(image) {
   var savi = image.expression(
@@ -150,7 +172,9 @@ var addSAVI_Landsat = function(image) {
       'NIR': image.select('B5'),
       'RED': image.select('B4')
     }).rename('SAVI');
-  return image.addBands(savi);
+  return image.addBands(savi)
+              .set('sensor', 'Landsat')
+              .set('system:time_start', image.get('system:time_start'));  
 };
 
 //----------------------------------------------------------------------------
@@ -163,7 +187,9 @@ var addOSAVI_Sentinel = function(image) {
       'NIR': image.select('B8A'),
       'RED': image.select('B4')
     }).rename('OSAVI');
-  return image.addBands(osavi);
+  return image.addBands(osavi)
+              .set('sensor', 'Sentinel')
+              .set('system:time_start', image.get('system:time_start'));  
 };
 var addOSAVI_Landsat = function(image) {
   var osavi = image.expression(
@@ -171,7 +197,9 @@ var addOSAVI_Landsat = function(image) {
       'NIR': image.select('B5'),
       'RED': image.select('B4')
     }).rename('OSAVI');
-  return image.addBands(osavi);
+  return image.addBands(osavi)
+              .set('sensor', 'Landsat')
+              .set('system:time_start', image.get('system:time_start'));  
 };
 
 //----------------------------------------------------------------------------
@@ -184,7 +212,9 @@ var addMSAVI_Sentinel = function(image) {
       'NIR': image.select('B8A'),
       'RED': image.select('B4')
     }).rename('MSAVI');
-  return image.addBands(msavi);
+  return image.addBands(msavi)
+              .set('sensor', 'Sentinel')
+              .set('system:time_start', image.get('system:time_start'));  
 };
 
 var addMSAVI_Landsat = function(image) {
@@ -193,7 +223,9 @@ var addMSAVI_Landsat = function(image) {
       'NIR': image.select('B5'),
       'RED': image.select('B4')
     }).rename('MSAVI');
-  return image.addBands(msavi);
+  return image.addBands(msavi)
+              .set('sensor', 'Landsat')
+              .set('system:time_start', image.get('system:time_start'));  
 };
 
 //----------------------------------------------------------------------------
@@ -206,7 +238,9 @@ var addNDMI_Sentinel = function(image) {
       'NIR': image.select('B8A'),
       'SWIR': image.select('B11')
     }).rename('NDMI');
-  return image.addBands(ndmi);
+  return image.addBands(ndmi)
+              .set('sensor', 'Sentinel')
+              .set('system:time_start', image.get('system:time_start'));  
 };
 
 var addNDMI_Landsat = function(image) {
@@ -215,7 +249,9 @@ var addNDMI_Landsat = function(image) {
       'NIR': image.select('B5'),
       'SWIR': image.select('B6')
     }).rename('NDMI');
-  return image.addBands(ndmi);
+  return image.addBands(ndmi)
+              .set('sensor', 'Landsat')
+              .set('system:time_start', image.get('system:time_start'));  
 };
 
 //----------------------------------------------------------------------------
@@ -228,7 +264,9 @@ var addNBR_Sentinel = function(image) {
       'NIR': image.select('B8A'),
       'SWIR': image.select('B12')
     }).rename('NBR');
-  return image.addBands(nbr);
+  return image.addBands(nbr)
+              .set('sensor', 'Sentinel')
+              .set('system:time_start', image.get('system:time_start'));  
 };
 
 var addNBR_Landsat = function(image) {
@@ -237,7 +275,9 @@ var addNBR_Landsat = function(image) {
       'NIR': image.select('B5'),
       'SWIR': image.select('B7')
     }).rename('NBR');
-  return image.addBands(nbr);
+  return image.addBands(nbr)
+              .set('sensor', 'Landsat')
+              .set('system:time_start', image.get('system:time_start'));  
 };
 
 //----------------------------------------------------------------------------
@@ -247,13 +287,17 @@ var addNBR_Landsat = function(image) {
 var addTVI_Sentinel = function(image) {
   var ndvi = image.select('NDVI'); // Assuming NDVI band already exists
   var tvi = ndvi.add(0.5).sqrt().rename('TVI');
-  return image.addBands(tvi);
+  return image.addBands(tvi)
+              .set('sensor', 'Sentinel')
+              .set('system:time_start', image.get('system:time_start'));  
 };
 
 var addTVI_Landsat = function(image) {
   var ndvi = image.select('NDVI'); // Assuming NDVI band already exists
   var tvi = ndvi.add(0.5).sqrt().rename('TVI');
-  return image.addBands(tvi);
+  return image.addBands(tvi)
+              .set('sensor', 'Landsat')
+              .set('system:time_start', image.get('system:time_start'));  
 };
 
 //----------------------------------------------------------------------------
@@ -266,7 +310,9 @@ var addMNDWI_Sentinel = function(image) {
       'GREEN': image.select('B3'),
       'SWIR1': image.select('B11')
     }).rename('MNDWI');
-  return image.addBands(mndwi);
+  return image.addBands(mndwi)
+              .set('sensor', 'Sentinel')
+              .set('system:time_start', image.get('system:time_start'));  
 };
 
 var addMNDWI_Landsat = function(image) {
@@ -275,7 +321,9 @@ var addMNDWI_Landsat = function(image) {
       'GREEN': image.select('B3'),
       'SWIR1': image.select('B6')
     }).rename('MNDWI');
-  return image.addBands(mndwi);
+  return image.addBands(mndwi)
+              .set('sensor', 'Landsat')
+              .set('system:time_start', image.get('system:time_start'));  
 };
 
 //----------------------------------------------------------------------------
@@ -290,7 +338,9 @@ var addWRI_Sentinel = function(image) {
       'NIR': image.select('B8A'),
       'SWIR1': image.select('B11')
     }).rename('WRI');
-  return image.addBands(wri);
+  return image.addBands(wri)
+              .set('sensor', 'Sentinel')
+              .set('system:time_start', image.get('system:time_start'));  
 };
 
 var addWRI_Landsat = function(image) {
@@ -301,7 +351,9 @@ var addWRI_Landsat = function(image) {
       'NIR': image.select('B5'),
       'SWIR1': image.select('B6')
     }).rename('WRI');
-  return image.addBands(wri);
+  return image.addBands(wri)
+              .set('sensor', 'Landsat')
+              .set('system:time_start', image.get('system:time_start'));  
 };
 
 //----------------------------------------------------------------------------
@@ -314,7 +366,9 @@ var addmSR_Sentinel = function(image) {
       'NIR': image.select('B8A'),
       'RED': image.select('B4')
     }).rename('mSR');
-  return image.addBands(msr);
+  return image.addBands(msr)
+              .set('sensor', 'Sentinel')
+              .set('system:time_start', image.get('system:time_start'));  
 };
 
 var addmSR_Landsat = function(image) {
@@ -323,7 +377,9 @@ var addmSR_Landsat = function(image) {
       'NIR': image.select('B5'),
       'RED': image.select('B4')
     }).rename('mSR');
-  return image.addBands(msr);
+  return image.addBands(msr)
+              .set('sensor', 'Landsat')
+              .set('system:time_start', image.get('system:time_start'));  
 };
 
 //----------------------------------------------------------------------------
@@ -339,6 +395,8 @@ var addARVI_Sentinel = function(image){
     'BLUE': image.select('B2')
   }).rename('ARVI');
   return image.addBands(arvi)
+              .set('sensor', 'Sentinel')
+              .set('system:time_start', image.get('system:time_start'));  
 };
 
 var addARVI_Landsat = function(image){
@@ -349,6 +407,8 @@ var addARVI_Landsat = function(image){
     'BLUE': image.select('B2')
   }).rename('ARVI');
   return image.addBands(arvi)
+              .set('sensor', 'Landsat')
+              .set('system:time_start', image.get('system:time_start'));  
 };
 
 //----------------------------------------------------------------------------
@@ -362,6 +422,8 @@ var addBWDRVI_Sentinel = function(image){
     'BLUE': image.select('B2')   // Blue
   }).rename('BWDRVI');
   return image.addBands(bwdrvi)
+              .set('sensor', 'Sentinel')
+              .set('system:time_start', image.get('system:time_start'));  
 }
 
 var addBWDRVI_Landsat = function(image){
@@ -371,6 +433,8 @@ var addBWDRVI_Landsat = function(image){
     'BLUE': image.select('B2')   // Blue
   }).rename('BWDRVI');
   return image.addBands(bwdrvi)
+              .set('sensor', 'Landsat')
+              .set('system:time_start', image.get('system:time_start'));  
 }
 
 //----------------------------------------------------------------------------
@@ -383,7 +447,9 @@ var addCIgreen_Sentinel = function(image){
       'NIR': image.select('B8A'),    // Near-Infrared
       'GREEN': image.select('B3')  // Green
     }).rename('CIgreen');
-  return image.addBands(cigreen);
+  return image.addBands(cigreen)
+              .set('sensor', 'Sentinel')
+              .set('system:time_start', image.get('system:time_start'));  
 };
 
 var addCIgreen_Landsat = function(image){
@@ -392,7 +458,9 @@ var addCIgreen_Landsat = function(image){
       'NIR': image.select('B5'),    
       'GREEN': image.select('B3')  
     }).rename('CIgreen');
-  return image.addBands(cigreen);
+  return image.addBands(cigreen)
+              .set('sensor', 'Landsat')
+              .set('system:time_start', image.get('system:time_start'));  
 };
 
 //----------------------------------------------------------------------------
@@ -406,7 +474,9 @@ var addCVI_Sentinel = function(image){
       'RED': image.select('B4'),    
       'GREEN': image.select('B3')  
     }).rename('CVI');
-  return image.addBands(cvi);
+  return image.addBands(cvi)
+              .set('sensor', 'Sentinel')
+              .set('system:time_start', image.get('system:time_start'));  
 };
 
 var addCVI_Landsat = function(image){
@@ -416,7 +486,9 @@ var addCVI_Landsat = function(image){
       'RED': image.select('B4'),    
       'GREEN': image.select('B3')  
     }).rename('CVI');
-  return image.addBands(cvi);
+  return image.addBands(cvi)
+              .set('sensor', 'Landsat')
+              .set('system:time_start', image.get('system:time_start'));  
 };
 
 //----------------------------------------------------------------------------
@@ -431,7 +503,9 @@ var addGARI_Sentinel = function(image){
       'BLUE': image.select('B2'),   
       'RED': image.select('B4')     
     }).rename('GARI');
-  return image.addBands(gari);
+  return image.addBands(gari)
+              .set('sensor', 'Sentinel')
+              .set('system:time_start', image.get('system:time_start'));  
 };
 
 var addGARI_Landsat = function(image){
@@ -442,7 +516,9 @@ var addGARI_Landsat = function(image){
       'BLUE': image.select('B2'),   
       'RED': image.select('B4')     
     }).rename('GARI');
-  return image.addBands(gari);
+  return image.addBands(gari)
+              .set('sensor', 'Landsat')
+              .set('system:time_start', image.get('system:time_start'));  
 };
 
 
@@ -503,7 +579,7 @@ var table = all_hls.map(function(image) {
 
   return image.select(['NDVI', 'MSI', 'NDWI', 'NDRE', 'EVI', 'GNDVI', 'SAVI', 'OSAVI', 'MSAVI', 'NDMI', 'NBR', 'TVI', 'MNDWI', 'WRI', 'mSR', 'ARVI', 'BWDRVI', 'CIgreen', 'CVI', 'GARI'])
     .reduceRegions({
-      collection: points_aoi,
+      collection: points,
       reducer: ee.Reducer.mean(),
       scale: 10
     }).map(function(f) {
@@ -520,7 +596,7 @@ Export.table.toDrive({
   collection: table.sort('plot_ID'),
   description: 'All_Vegetation_Indices_Export',
   folder: 'gee_export',
-  fileNamePrefix: 'All_Vegetation_Indices_Export_SLP',
+  fileNamePrefix: 'All_Vegetation_Indices_Export_dendronet_full',
   fileFormat: 'CSV',
   selectors: ['plot_ID', 'date', 'sensor', 'NDVI', 'MSI', 'NDWI', 'NDRE', 'EVI', 'GNDVI', 'SAVI', 'OSAVI', 'MSAVI', 'NDMI', 'NBR', 'TVI', 'MNDWI', 'WRI', 'mSR', 'ARVI', 'BWDRVI', 'CIgreen', 'CVI', 'GARI']
 });
