@@ -1,0 +1,391 @@
+# Summary of steps:
+
+# -------------------------------------------------------------
+# 1. Load necessary libraries
+# -------------------------------------------------------------
+library(dplyr)
+library(ggplot2)
+library(raster)
+library(lubridate)
+library(ggpubr) 
+library(smplot2) 
+library(stringr)
+library(tidyr) 
+library(rlang)
+library(readr)
+
+# -------------------------------------------------------------
+# 2. Load and prepare input data - time series
+# -------------------------------------------------------------
+# - Load data from CSV files
+# - Unification of data format (date format, column names)
+# - Merge bands + calculate veg. indices, merge HLS+TWD data 
+# - Select relevant variables (TWD, bands, indices)
+
+file_path1a <- "C:/2025_HLS_TWD/2_analysis_ready_datasets/Data/TWD/BE_TWD.csv"
+file_path1b <- "C:/2025_HLS_TWD/2_analysis_ready_datasets/Data/TWD/NS_TWD.csv"
+file_path1c <- "C:/2025_HLS_TWD/2_analysis_ready_datasets/Data/TWD/OK_TWD.csv"
+file_path1d <- "C:/2025_HLS_TWD/2_analysis_ready_datasets/Data/TWD/SP_TWD.csv"
+
+TWD_BE <- read.csv(file_path1a, header = TRUE, sep = ";")
+TWD_NS <- read.csv(file_path1b, header = TRUE, sep = ";")
+TWD_OK <- read.csv(file_path1c, header = TRUE, sep = ";")
+TWD_SP <- read.csv(file_path1d, header = TRUE, sep = ";")
+
+TWD <- full_join(TWD_BE, TWD_NS, by = "Date")
+TWD <- full_join(TWD, TWD_OK, by = "Date")
+TWD <- full_join(TWD, TWD_SP, by = "Date")
+
+TWD_clean <- TWD %>%
+  # Převod z širokého formátu na dlouhý
+  pivot_longer(
+    cols = starts_with("TWD_"), 
+    names_to = "sensor_id",
+    values_to = "TWD_value"
+  ) %>%
+  
+  # Vytvoření nového sloupce 'plot_id'
+  mutate(plot_ID = parse_number(sensor_id)) %>%
+  
+  # Filtrování a konverze
+  filter(!is.na(TWD_value)) %>%
+  mutate(Date = as.Date(Date, format = "%Y-%m-%d")) %>%
+  mutate(TWD_value = as.numeric(TWD_value))
+
+# BGRNIRWSIR1SWIR2
+file_path2 <- "C:/2025_HLS_TWD/2_analysis_ready_datasets/Data/HLS/hls_filtered.csv" # HLS Bands
+HLS_bands <- read.csv(file_path2)
+
+HLS_bands_wide <- HLS_bands_wide %>%
+  mutate(
+    # Existing NDVI calculation
+    NDVI = case_when(
+      sensor == "HLS-S2" ~ (B8A - B4) / (B8A + B4),
+      sensor == "HLS-L8" ~ (B5 - B4) / (B5 + B4),
+      TRUE ~ NA_real_
+    ),
+    
+    # MSI (Moisture Stress Index)
+    MSI = case_when(
+      sensor == "HLS-S2" ~ B11 / B8A,
+      sensor == "HLS-L8" ~ B6 / B5,
+      TRUE ~ NA_real_
+    ),
+    
+    # NDWI (Normalized Difference Water Index)
+    NDWI = case_when(
+      sensor == "HLS-S2" ~ (B3 - B11) / (B3 + B11),
+      sensor == "HLS-L8" ~ (B3 - B6) / (B3 + B6),
+      TRUE ~ NA_real_
+    ),
+    
+    # NDRE (Normalized Difference Red Edge) - Note: L8 approximation
+    NDRE = case_when(
+      sensor == "HLS-S2" ~ (B8A - B5) / (B8A + B5),
+      sensor == "HLS-L8" ~ (B5 - B4) / (B5 + B4), # Landsat doesn't have a Red Edge band, so this is an approximation (same as NDVI)
+      TRUE ~ NA_real_
+    ),
+    
+    # EVI (Enhanced Vegetation Index)
+    EVI = case_when(
+      sensor == "HLS-S2" ~ 2.5 * ((B8A - B4) / (B8A + 6 * B4 - 7.5 * B2 + 1)),
+      sensor == "HLS-L8" ~ 2.5 * ((B5 - B4) / (B5 + 6 * B4 - 7.5 * B2 + 1)),
+      TRUE ~ NA_real_
+    ),
+    
+    # GNDVI (Green Normalized Difference Vegetation Index)
+    GNDVI = case_when(
+      sensor == "HLS-S2" ~ (B8A - B3) / (B8A + B3),
+      sensor == "HLS-L8" ~ (B5 - B3) / (B5 + B3),
+      TRUE ~ NA_real_
+    ),
+    
+    # SAVI (Soil Adjusted Vegetation Index)
+    SAVI = case_when(
+      sensor == "HLS-S2" ~ ((B8A - B4) / (B8A + B4 + 0.5)) * 1.5,
+      sensor == "HLS-L8" ~ ((B5 - B4) / (B5 + B4 + 0.5)) * 1.5,
+      TRUE ~ NA_real_
+    ),
+    
+    # OSAVI (Optimized Soil Adjusted Vegetation Index)
+    OSAVI = case_when(
+      sensor == "HLS-S2" ~ ((B8A - B4) / (B8A + B4 + 0.16)) * 1.16,
+      sensor == "HLS-L8" ~ ((B5 - B4) / (B5 + B4 + 0.16)) * 1.16,
+      TRUE ~ NA_real_
+    ),
+    
+    # MSAVI (Modified Soil Adjusted Vegetation Index)
+    MSAVI = case_when(
+      sensor == "HLS-S2" ~ (2 * B8A + 1 - sqrt((2 * B8A + 1)^2 - 8 * (B8A - B4))) / 2,
+      sensor == "HLS-L8" ~ (2 * B5 + 1 - sqrt((2 * B5 + 1)^2 - 8 * (B5 - B4))) / 2,
+      TRUE ~ NA_real_
+    ),
+    
+    # NDMI (Normalized Difference Moisture Index)
+    NDMI = case_when(
+      sensor == "HLS-S2" ~ (B8A - B11) / (B8A + B11),
+      sensor == "HLS-L8" ~ (B5 - B6) / (B5 + B6),
+      TRUE ~ NA_real_
+    ),
+    
+    # NBR (Normalized Burn Ratio)
+    NBR = case_when(
+      sensor == "HLS-S2" ~ (B8A - B12) / (B8A + B12),
+      sensor == "HLS-L8" ~ (B5 - B7) / (B5 + B7),
+      TRUE ~ NA_real_
+    ),
+    
+    # TVI (Transformed Vegetation Index) - Note: Assumes NDVI is already calculated
+    TVI = case_when(
+      !is.na(NDVI) ~ sqrt(NDVI + 0.5),
+      TRUE ~ NA_real_
+    ),
+    
+    # MNDWI (Modified Normalized Difference Water Index)
+    MNDWI = case_when(
+      sensor == "HLS-S2" ~ (B3 - B11) / (B3 + B11),
+      sensor == "HLS-L8" ~ (B3 - B6) / (B3 + B6),
+      TRUE ~ NA_real_
+    ),
+    
+    # WRI (Water Ratio Index)
+    WRI = case_when(
+      sensor == "HLS-S2" ~ (B3 + B4) / (B8A + B11),
+      sensor == "HLS-L8" ~ (B3 + B4) / (B5 + B6),
+      TRUE ~ NA_real_
+    ),
+    
+    # mSR (Modified Simple Ratio)
+    mSR = case_when(
+      sensor == "HLS-S2" ~ (B8A - B4) / (sqrt(B8A + B4) + 1),
+      sensor == "HLS-L8" ~ (B5 - B4) / (sqrt(B5 + B4) + 1),
+      TRUE ~ NA_real_
+    ),
+    
+    # ARVI (Atmospherically Resistant Vegetation Index)
+    ARVI = case_when(
+      sensor == "HLS-S2" ~ (B8A - (B4 - 1 * (B2 - B4))) / (B8A + (B4 - 1 * (B2 - B4))),
+      sensor == "HLS-L8" ~ (B5 - (B4 - 1 * (B2 - B4))) / (B5 + (B4 - 1 * (B2 - B4))),
+      TRUE ~ NA_real_
+    ),
+    
+    # BWDRVI (Blue-wide dynamic range vegetation index)
+    BWDRVI = case_when(
+      sensor == "HLS-S2" ~ (0.1 * B8A - B2) / (0.1 * B8A + B2),
+      sensor == "HLS-L8" ~ (0.1 * B5 - B2) / (0.1 * B5 + B2),
+      TRUE ~ NA_real_
+    ),
+    
+    # CIgreen (Chlorophyll Index Green)
+    CIgreen = case_when(
+      sensor == "HLS-S2" ~ (B8A / B3) - 1,
+      sensor == "HLS-L8" ~ (B5 / B3) - 1,
+      TRUE ~ NA_real_
+    ),
+    
+    # CVI (Chlorophyll Vegetation Index)
+    CVI = case_when(
+      sensor == "HLS-S2" ~ B8A * (B4 / B3)^2,
+      sensor == "HLS-L8" ~ B5 * (B4 / B3)^2,
+      TRUE ~ NA_real_
+    ),
+    
+    # GARI (Green Atmospherically Resistant Vegetation Index)
+    GARI = case_when(
+      sensor == "HLS-S2" ~ (B8A - (B3 - (B2 - B4))) / (B8A - (B3 + (B2 - B4))),
+      sensor == "HLS-L8" ~ (B5 - (B3 - (B2 - B4))) / (B5 - (B3 + (B2 - B4))),
+      TRUE ~ NA_real_
+    )
+  )
+
+HLS_bands_wide <- HLS_bands_wide %>%
+  mutate(plot_ID = as.integer(plot_ID))
+
+TWD_clean <- TWD_clean %>%
+  mutate(plot_ID = as.integer(plot_ID))
+
+TWD_HLS <- inner_join( # Combine HLS and TWD based on plot_ID and date columns
+  TWD_clean,
+  HLS_bands_wide,
+  by = c("plot_ID", "date")
+)
+cat("\nRows after merging TWD and HLS:", nrow(TWD_HLS), "\n")  
+
+# plot only year 2024
+TWD_HLS_24 <- TWD_HLS %>%
+  filter(year(date) == 2024)
+
+ggplot(TWD_HLS_24, aes(x = date)) + # Test plot
+  geom_line(aes(y = TWD, color = "TWD")) +
+  geom_line(aes(y = NDWI, color = "TVI")) +
+  scale_y_continuous(
+    name = "TWD",
+    sec.axis = sec_axis(~ ., name = "TVI")
+  ) +
+  scale_color_manual(
+    name = "Proměnná",
+    values = c("TWD" = "blue", "TVI" = "green")
+  ) +
+  labs(
+    title = "Raw time series of TWD a TVI for year 2024",
+    x = "Datum"
+  ) +
+  scale_x_date(date_labels = "%b")+
+  theme_minimal() +
+  theme(
+    legend.position = "bottom"
+  )
+
+# -------------------------------------------------------------
+# 3. Clean the dataset, agreggate and normalize time-series 
+# -------------------------------------------------------------
+# - Outlier removal 
+# - Min-Max normalisation of time-series
+# - Daily, Weekly, Monthly, -Inter -Outer vegetation period
+
+# Select only "good" values from the dataset
+print(TWD_HLS)
+
+#Separate the dataset into: Weekly, Monthly, -Inter -Outer vegetation period
+TWD_HLS_weekly <- TWD_HLS_nooutliers_normalized %>%
+  mutate(week = floor_date(date, "week")) %>%
+  group_by(plot_ID, week) %>%
+  summarise(across(where(is.numeric) & !starts_with("TWD"), mean, na.rm = TRUE),
+            TWD = mean(TWD, na.rm = TRUE),
+            .groups = "drop") %>%
+  rename(date = week) %>%
+  arrange(plot_ID, date)
+
+TWD_HLS_monthly <- TWD_HLS_nooutliers_normalized %>%
+  mutate(month = floor_date(date, "month")) %>%
+  group_by(plot_ID, month) %>%
+  summarise(across(where(is.numeric) & !starts_with("TWD"), mean, na.rm = TRUE),
+            TWD = mean(TWD, na.rm = TRUE),
+            .groups = "drop") %>%
+  rename(date = month) %>%
+  arrange(plot_ID, date)
+
+vegetation_start_month <- 4
+vegetation_end_month <- 10
+
+TWD_HLS_inter_vegetation <- TWD_HLS_nooutliers_normalized %>%
+  mutate(month = month(date)) %>%
+  filter(month >= vegetation_start_month & month <= vegetation_end_month) %>%
+  dplyr::select(-month) 
+
+TWD_HLS_outer_vegetation <- TWD_HLS_nooutliers_normalized %>%
+  mutate(month = month(date)) %>%
+  filter(month < vegetation_start_month | month > vegetation_end_month) %>%
+  dplyr::select(-month) 
+
+# -------------------------------------------------------------
+# 4. Exploratory analysis 
+# -------------------------------------------------------------
+# - Basic visualisation of time-series 
+# - Correlation between RS variables and TWD - per dataset
+# - Correlation between RS variables and TWD - per species (plots)
+# - Basic description statistics
+# - Determination of curve shift (spectral shift)
+
+TWD_HLS_nooutliers_normalized <- as_tibble(TWD_HLS_nooutliers_normalized)
+
+TWD_HLS_nooutliers_normalized_long <- TWD_HLS_nooutliers_normalized %>%
+  dplyr::select(plot_ID, date, TWD, NDVI) %>%
+  tidyr::pivot_longer(cols = c(TWD, NDVI),
+                      names_to = "variable",
+                      values_to = "value")
+
+# plot only year 2024
+TWD_HLS_nooutliers_normalized_long_24 <- TWD_HLS_nooutliers_normalized_long %>%
+  filter(year(date) == 2024)
+
+ggplot(TWD_HLS_nooutliers_normalized_long_24, aes(x = date, y = value, color = variable)) +
+  geom_line(linewidth = 0.8) +
+  facet_wrap(~plot_ID, scales = "free_y") +
+  labs(
+    title = "TWD vs NDVI (All Plot IDs) - normalized for year 2024",
+    x = "Date",
+    y = "Normalized Value (0–1)",
+    color = "Variable"
+  ) +
+  scale_color_manual(
+    values = c("TWD" = "blue", 
+               "NDVI" = "green")) +
+  theme_minimal() +
+  theme(
+    legend.position = "top",
+    plot.title = element_text(face = "bold", hjust = 0.5)
+  )
+
+# Autosave for all the variables
+variables_to_plot <- c("TWD", "B1","B10","B11","B12","B2","B3","B4",
+                       "B5","B6","B7","B8","B8A","B9","NDVI","MSI",
+                       "NDWI","NDRE","EVI","GNDVI","SAVI","OSAVI","MSAVI","NDMI",
+                       "NBR","TVI","MNDWI","WRI","mSR","ARVI","BWDRVI","CIgreen",
+                       "CVI","GARI")
+
+TWD_HLS_long <- dplyr::select(TWD_HLS_nooutliers_normalized, plot_ID, date, all_of(variables_to_plot)) %>%
+  tidyr::pivot_longer(cols = all_of(variables_to_plot),
+                      names_to = "variable",
+                      values_to = "value")
+
+TWD_HLS_long_24 <- TWD_HLS_long %>%
+  filter(year(date) == 2024)
+
+output_folder <- "C:/2025_HLS_TWD/2_analysis_ready_datasets/graphs/"
+
+for (var in variables_to_plot) {
+  plot_data <- TWD_HLS_long_24 %>% filter(variable %in% c("TWD", var))
+  
+  p <- ggplot(plot_data, aes(x = date, y = value, color = variable)) +
+    geom_line(linewidth = 0.8) +
+    facet_wrap(~plot_ID, scales = "free_y") +
+    labs(
+      title = paste("TWD vs", var, "- normalized for year 2024"),
+      x = "Date",
+      y = "Normalized Value (0–1)",
+      color = "Variable"
+    ) +
+    scale_color_manual(
+      values = setNames(c("blue", "green"), c("TWD", var))
+    ) +
+    theme_bw() +
+    theme(
+      legend.position = "top",
+      plot.title = element_text(face = "bold", hjust = 0.5)
+    )
+  
+  ggsave(
+    filename = paste0(output_folder, "TWD_vs_", var, "_2024.png"),
+    plot = p,
+    width = 10,
+    height = 6
+  )
+}
+
+# -------------------------------------------------------------
+# 5. Modelling od TWD and RS relationship 
+# -------------------------------------------------------------
+# - Create GAM model for each variable
+# - Create ML model for each variable
+# - Explore interactions between variables (ie. VPD * temperature)
+# - Comparison of models (R2, AIC)
+
+# -------------------------------------------------------------
+# 6. Spatial comparison (influence of height, spatial positions of plots, species)
+# -------------------------------------------------------------
+# - compare height position of plots
+# - compare actual position of plots
+# - visualise differences
+
+# -------------------------------------------------------------
+# 7. Visualisation of results
+# -------------------------------------------------------------
+# - modelling of predicted vs. observed data
+# - heatmaps, regression plots
+
+# -------------------------------------------------------------
+# 8. Export the results
+# -------------------------------------------------------------
+# - export tables
+# - export images, graphs
