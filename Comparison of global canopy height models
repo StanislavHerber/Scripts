@@ -1,0 +1,8 @@
+# input rasters
+rasters_dir <- "C:/2025_clanek_modely_terenu/Analyza_2.0/clip_resample/Resample_10m"
+rasters_files <- list.files(rasters_dir, pattern = "\\.tif$", full.names = T)
+file_to_project <- "SLP_03_2024_nDSM_05m_setNull_res10m.tif"
+
+# load input points
+body <- read.dbf("C:/2025_clanek_modely_terenu/Analyza_2.0/to_points/SLP_nDSM_res10m_10x10_label_select.dbf")
+print(body)
